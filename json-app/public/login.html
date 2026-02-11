@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://firebasestorage.googleapis.com https://via.placeholder.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com;">
+
+    <title>Login - User Connect</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Welcome Back</h1>
+        <p class="subtitle">Securely log in to your account</p>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <span class="label-text">Email or Phone</span>
+                <div class="input-wrapper">
+                    <i data-lucide="mail"></i>
+                    <input type="text" id="email" name="email" placeholder="john@example.com" autocomplete="email"
+                        required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <span class="label-text">Password</span>
+                <div class="input-wrapper">
+                    <i data-lucide="lock"></i>
+                    <input type="password" id="password" name="password" placeholder="••••••••"
+                        autocomplete="current-password" required>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn" class="btn">
+                <span>Login</span>
+                <i data-lucide="log-in"></i>
+            </button>
+        </form>
+
+        <div id="message" class="message"></div>
+
+        <div class="footer-text">
+            DON'T HAVE AN ACCOUNT? <a href="register.html">JOIN NOW</a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA65r8j7cxTi_Vk6FGl6PZjPZZwa1xALZw",
+            authDomain: "chat-bc8cc.firebaseapp.com",
+            projectId: "chat-bc8cc",
+            storageBucket: "chat-bc8cc.firebasestorage.app",
+            messagingSenderId: "1063212485932",
+            appId: "1:1063212485932:web:8e8ce163b2b65c84e97089",
+            measurementId: "G-X5BQ3RJS8M"
+        };
+        //nice
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        lucide.createIcons();
+
+        const form = document.getElementById('loginForm');
+        const messageBox = document.getElementById('message');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            messageBox.style.display = 'none';
+            submitBtn.querySelector('span').innerText = "AUTHORIZING...";
+            submitBtn.disabled = true;
+
+            const email = form.email.value;
+            const password = form.password.value;
+
+            try {
+                const q = query(collection(db, "users"), where("email", "==", email), where("password", "==", password));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    throw new Error("❌ Invalid email or password!");
+                }
+
+                const user = querySnapshot.docs[0].data();
+                localStorage.setItem('user', JSON.stringify(user));
+
+                messageBox.innerText = "Access Granted! Redirecting...";
+                messageBox.className = "message success";
+                messageBox.style.display = "block";
+
+                setTimeout(() => {
+                    window.location.href = "admin.html";
+                }, 1500);
+
+            } catch (error) {
+                console.error(error);
+                messageBox.innerText = error.message;
+                messageBox.className = "message error";
+                messageBox.style.display = "block";
+            } finally {
+                submitBtn.querySelector('span').innerText = "Login";
+                submitBtn.disabled = false;
+            }
+        };
+    </script>
+</body>
+
+</html>

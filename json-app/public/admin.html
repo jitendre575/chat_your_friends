@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://firebasestorage.googleapis.com https://via.placeholder.com https://api.dicebear.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com;">
+    <title>Admin Dashboard - User Connect</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="container">
+        <h1>Admin Access</h1>
+        <p class="subtitle">Enter your management credentials</p>
+        <div class="form-group">
+            <span class="label-text">Admin Password</span>
+            <div class="input-wrapper">
+                <i data-lucide="shield-check"></i>
+                <input type="password" id="adminPass" placeholder="••••••••" autocomplete="current-password">
+            </div>
+        </div>
+        <button onclick="loginAdmin()" class="btn" id="loginBtn">
+            <span>Unlock Dashboard</span>
+        </button>
+        <div id="loginMessage" class="message error"></div>
+        <div style="text-align: center; margin-top: 24px;">
+            <a href="register.html"
+                style="color: var(--text-muted); font-size: 0.85rem; text-decoration: none; font-weight: 500;">Back to
+                App</a>
+        </div>
+    </div>
+
+    <!-- Admin Content -->
+    <div id="adminPanel" class="admin-container" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;">
+            <div>
+                <h1>Management Hub</h1>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">Monitor live users and activity</p>
+            </div>
+            <button onclick="logout()" class="btn"
+                style="width: auto; padding: 12px 24px; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--card-border); text-transform: none;">
+                <i data-lucide="log-out"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+
+        <div id="userGrid" class="user-grid">
+            <!-- User cards will be injected here -->
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA65r8j7cxTi_Vk6FGl6PZjPZZwa1xALZw",
+            authDomain: "chat-bc8cc.firebaseapp.com",
+            projectId: "chat-bc8cc",
+            storageBucket: "chat-bc8cc.firebasestorage.app",
+            messagingSenderId: "1063212485932",
+            appId: "1:1063212485932:web:8e8ce163b2b65c84e97089",
+            measurementId: "G-X5BQ3RJS8M"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Initialize Lucide
+        lucide.createIcons();
+
+        window.loginAdmin = async function () {
+            const password = document.getElementById('adminPass').value;
+            const loginMessage = document.getElementById('loginMessage');
+            const loginBtn = document.getElementById('loginBtn');
+
+            if (password === "335524JI") {
+                sessionStorage.setItem('adminLoggedIn', 'true');
+                showAdminPanel();
+            } else {
+                loginMessage.innerText = "❌ Access Denied: Invalid Credentials";
+                loginMessage.style.display = 'block';
+            }
+        };
+
+        window.showAdminPanel = function () {
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            document.body.style.alignItems = 'flex-start'; // Better for long grids
+            document.body.style.paddingTop = '60px';
+            fetchUsersFromFirebase();
+        };
+
+        async function fetchUsersFromFirebase() {
+            const userGrid = document.getElementById('userGrid');
+            userGrid.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 60px;">
+                    <p style="color: var(--text-muted); font-size: 1.1rem;">Synchronizing with directory...</p>
+                </div>
+            `;
+
+            try {
+                const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+                const querySnapshot = await getDocs(q);
+
+                userGrid.innerHTML = '';
+
+                if (querySnapshot.empty) {
+                    userGrid.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; padding: 60px; border: 2px dashed var(--card-border); border-radius: 20px;">
+                            <p style="color: var(--text-muted);">No active users found in the system.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                querySnapshot.forEach((doc) => {
+                    const user = doc.data();
+                    const card = document.createElement('div');
+                    card.className = 'user-card';
+                    card.innerHTML = `
+                        <img src="${user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.name}" alt="${user.name}" class="user-img" onerror="this.src='https://via.placeholder.com/100'">
+                        <div class="user-name">${user.name}</div>
+                        <div class="user-email">${user.email}</div>
+                        <div style="margin-top: 15px; font-size: 0.75rem; color: var(--primary); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                            ${user.city || 'GLOBAL'} • ${user.age || '??'} YRS
+                        </div>
+                    `;
+                    userGrid.appendChild(card);
+                });
+            } catch (error) {
+                console.error("Error:", error);
+                userGrid.innerHTML = '<p style="color: var(--error); grid-column: 1/-1; text-align: center;">Sync failed. Internal Server Error.</p>';
+            }
+        }
+
+        window.logout = function () {
+            sessionStorage.removeItem('adminLoggedIn');
+            location.reload();
+        };
+
+        if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+            window.showAdminPanel();
+        }
+    </script>
+</body>
+
+</html>
