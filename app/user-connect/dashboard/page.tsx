@@ -2,18 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, LogOut, MapPin, Search } from 'lucide-react';
+import { MessageSquare, LogOut, MapPin, Search, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { db, auth } from '@/lib/firebase';
+import { collection, query, getDocs, where } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 interface User {
-    _id: string;
+    uid: string;
     name: string;
     email: string;
     age: number;
     city: string;
-    profilePhoto: string;
-    isOnline: boolean;
-    lastSeen: string;
+    profilePhoto?: string;
+    isOnline?: boolean;
+    lastSeen?: string;
 }
 
 export default function Dashboard() {
@@ -21,46 +24,62 @@ export default function Dashboard() {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [currentUser, setCurrentUser] = useState<any>(null);
 
     useEffect(() => {
-        const fetchUsers = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                setCurrentUser(user);
+                fetchUsers(user.uid);
+            } else {
                 router.push('/user-connect');
-                return;
             }
+        });
 
-            try {
-                const res = await fetch('http://localhost:5000/api/users', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setUsers(data);
-                } else {
-                    toast.error('Session expired');
-                    localStorage.clear();
-                    router.push('/user-connect');
-                }
-            } catch (err) {
-                toast.error('Failed to fetch users');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchUsers();
+        return () => unsubscribe();
     }, [router]);
 
-    const handleLogout = () => {
-        localStorage.clear();
-        router.push('/user-connect');
-        toast.success('Logged out');
+    const fetchUsers = async (currentUid: string) => {
+        try {
+            const q = query(collection(db, 'users'), where('uid', '!=', currentUid));
+            const querySnapshot = await getDocs(q);
+            const usersData: User[] = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                usersData.push({
+                    uid: data.uid,
+                    name: data.name || 'Anonymous',
+                    email: data.email || '',
+                    age: data.age || 0,
+                    city: data.city || 'Unknown',
+                    profilePhoto: data.profilePhoto,
+                    isOnline: data.isOnline,
+                    lastSeen: data.lastSeen
+                });
+            });
+            setUsers(usersData);
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to fetch users');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            localStorage.clear();
+            router.push('/user-connect');
+            toast.success('Logged out');
+        } catch (err) {
+            toast.error('Logout failed');
+        }
     };
 
     const filteredUsers = users.filter(user =>
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.city.toLowerCase().includes(searchQuery.toLowerCase())
+        (user.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+        (user.city?.toLowerCase() || '').includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -72,6 +91,10 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    <div className="hidden md:block text-right mr-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-white">{currentUser?.displayName || 'User'}</p>
+                        <p className="text-[8px] font-bold text-muted-foreground uppercase">{currentUser?.email}</p>
+                    </div>
                     <button
                         onClick={handleLogout}
                         className="p-3 rounded-xl bg-white/5 border border-white/10 text-muted-foreground hover:text-white hover:bg-white/10 transition-all"
@@ -110,7 +133,7 @@ export default function Dashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredUsers.map(user => (
                             <div
-                                key={user._id}
+                                key={user.uid}
                                 className="group relative bg-card/40 border-2 border-white/5 hover:border-primary/50 rounded-[2.5rem] overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20"
                             >
                                 <div className="absolute top-4 right-4 z-10">
@@ -120,12 +143,16 @@ export default function Dashboard() {
                                     </div>
                                 </div>
 
-                                <div className="relative h-48 overflow-hidden">
-                                    <img
-                                        src={user.profilePhoto}
-                                        alt={user.name}
-                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                    />
+                                <div className="relative h-48 overflow-hidden bg-white/5 flex items-center justify-center">
+                                    {user.profilePhoto ? (
+                                        <img
+                                            src={user.profilePhoto}
+                                            alt={user.name}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                    ) : (
+                                        <UserIcon size={64} className="text-white/10" />
+                                    )}
                                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
                                 </div>
 
@@ -142,7 +169,7 @@ export default function Dashboard() {
                                     </div>
 
                                     <button
-                                        onClick={() => router.push(`/user-connect/chat/${user._id}`)}
+                                        onClick={() => router.push(`/user-connect/chat/${user.uid}`)}
                                         className="w-full group/btn relative flex items-center justify-center gap-3 py-4 bg-white/5 hover:bg-primary border border-white/10 hover:border-primary rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-primary-foreground transition-all duration-300"
                                     >
                                         <MessageSquare size={16} className="group-hover/btn:scale-110 transition-transform" />

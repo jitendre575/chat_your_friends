@@ -23,6 +23,8 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+app.get('/api/test', (req, res) => res.send('OK'));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -70,7 +72,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5005;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/user-connect';
 
 mongoose.connect(MONGO_URI)
@@ -79,3 +81,8 @@ mongoose.connect(MONGO_URI)
         server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
     })
     .catch(err => console.log(err));
+
+app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(err.status || 500).json({ message: err.message });
+});

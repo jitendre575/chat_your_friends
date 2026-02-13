@@ -4,6 +4,13 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Mail, Lock, Sparkles, ArrowRight, Phone, MapPin, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { auth, db } from '@/lib/firebase';
+import {
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    updateProfile
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 export default function AuthPage() {
     const router = useRouter();
@@ -25,35 +32,56 @@ export default function AuthPage() {
         e.preventDefault();
         setLoading(true);
 
-        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-        const payload = isLogin
-            ? { email: formData.email, password: formData.password }
-            : formData;
-
         try {
-            const res = await fetch(`http://localhost:5000${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            if (isLogin) {
+                // Firebase Login
+                const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+                const user = userCredential.user;
 
-            const data = await res.json();
+                // Get extra user data from Firestore
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                const userData = userDoc.exists() ? userDoc.data() : { role: 'user' };
 
-            if (res.ok) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-                toast.success(isLogin ? 'Login Successful' : 'Account Created');
+                localStorage.setItem('user', JSON.stringify({ ...user, ...userData }));
+                toast.success('Login Successful');
 
-                if (data.user.role === 'admin') {
+                if (userData.role === 'admin') {
                     router.push('/user-connect/admin');
                 } else {
                     router.push('/user-connect/dashboard');
                 }
             } else {
-                toast.error(data.message || 'Something went wrong');
+                // Firebase Registration
+                const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+                const user = userCredential.user;
+
+                // Update Profile with Name
+                await updateProfile(user, { displayName: formData.name });
+
+                // Store extra data in Firestore
+                const userData = {
+                    uid: user.uid,
+                    name: formData.name,
+                    email: formData.email,
+                    age: formData.age,
+                    city: formData.city,
+                    role: 'user',
+                    createdAt: new Date().toISOString()
+                };
+
+                await setDoc(doc(db, 'users', user.uid), userData);
+
+                localStorage.setItem('user', JSON.stringify(userData));
+                toast.success('Account Created');
+                router.push('/user-connect/dashboard');
             }
-        } catch (err) {
-            toast.error('Server connection failed');
+        } catch (err: any) {
+            console.error(err);
+            let message = 'Something went wrong';
+            if (err.code === 'auth/email-already-in-use') message = 'Email already in use';
+            if (err.code === 'auth/invalid-credential') message = 'Invalid email or password';
+            if (err.code === 'auth/weak-password') message = 'Password is too weak';
+            toast.error(message);
         } finally {
             setLoading(false);
         }
